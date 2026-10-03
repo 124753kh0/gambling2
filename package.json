@@ -1,6 +1,7 @@
 {
   "name": "river-room-poker",
   "private": true,
+  "type": "module",
   "version": "1.0.0",
   "workspaces": ["apps/*"],
   "scripts": {
