@@ -9,6 +9,7 @@ export interface PublicPlayer {
   debt: number;
   bet: number;
   folded: boolean;
+  allIn: boolean;
   connected: boolean;
   isDealer: boolean;
   isSmallBlind: boolean;

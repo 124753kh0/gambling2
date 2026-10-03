@@ -19,7 +19,7 @@ To play across devices on your local network, use the host computer's LAN addres
 
 ## Gameplay
 
-Create a table or join one by room code. Players receive private hole cards; the server owns all chips, turns, and community cards. The game supports 2–6 seats, blinds, fold/check/call/raise, and showdown hand ranking. When your stack is zero or below, you can borrow chips equal to your outstanding debt plus 250 (for example, 2,000 debt offers a 2,250-chip loan). Chips are fictional and have no cash value.
+Create a table or join one by room code. Players receive private hole cards; the server owns all chips, turns, and community cards. The game supports 2–6 seats, blinds, fold/check/call/raise, and showdown hand ranking. If you have outstanding debt, you can take a loan equal to your debt plus 250 chips, regardless of your current chip count (for example, 1,000 debt offers 1,250 chips). Chips are fictional and have no cash value.
 
 ## Scripts
 
