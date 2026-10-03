@@ -130,12 +130,12 @@ function App() {
               const top = 50 + Math.sin(angle) * 46;
               const isWinner = snapshot.winnerIds.includes(player.id);
               return <div key={player.id} className={`player-seat ${player.isTurn ? "on-turn" : ""} ${player.id === me?.id ? "my-seat" : ""} ${player.folded ? "folded" : ""} ${isWinner ? "winner" : ""}`} style={{ left: `${left}%`, top: `${top}%` }}>
-                <div className="seat-cards">{player.cards.length ? player.cards.map((card, index) => <PlayingCard key={index} card={card} small />) : snapshot.street !== "waiting" && snapshot.street !== "showdown" && !player.folded ? <><PlayingCard faceDown small /><PlayingCard faceDown small /></> : null}</div>
+                <div className="seat-cards">{player.cards.length ? player.cards.map((card, index) => <div className="seat-card-slot" key={index}><PlayingCard card={card} small /></div>) : snapshot.street !== "waiting" && snapshot.street !== "showdown" && !player.folded ? <><div className="seat-card-slot"><PlayingCard faceDown small /></div><div className="seat-card-slot"><PlayingCard faceDown small /></div></> : null}</div>
                 <div className="avatar-wrap"><div className="avatar">{player.name.slice(0, 1).toUpperCase()}</div>{player.isDealer && <span className="dealer-chip">D</span>}</div>
                 <div className="player-name">{player.name}{player.id === me?.id && <span className="you-tag">YOU</span>}</div>
                 <div className="player-stack-row">
                   <div className="player-stack">{money(player.chips)} <span>CHIPS</span></div>
-                  {player.debt > 0 && <div className="player-debt">DEBT {money(player.debt)}</div>}
+                  {player.debt > 0 && <div className="player-debt" style={{ display: "inline-block", marginTop: 2, padding: "2px 5px", border: "1px solid #d4c67d80", borderRadius: 999, background: "#181a11b8", color: "#d4c67d", font: "10px monospace", whiteSpace: "nowrap" }}>DEBT {money(player.debt)}</div>}
                 </div>
                 {!player.connected && <div className="player-status">RECONNECTING</div>}
                 {player.folded && snapshot.street !== "waiting" && <div className="player-status">FOLDED</div>}
