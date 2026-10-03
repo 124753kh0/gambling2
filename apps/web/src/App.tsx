@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type { ClientToServerEvents, PlayerAction, RoomSnapshot, ServerToClientEvents } from "../../../shared/protocol";
+import { calculateLoanAmount } from "../../../shared/loans";
 
 type PokerSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.DEV
@@ -74,8 +75,7 @@ function App() {
   }
   function takeLoan() {
     if (!socket || !connected) return;
-    const amount = Math.max(250, Math.min(1000, (me?.debt ?? 0) ? 250 : 500));
-    socket.emit("game:loan", { amount });
+    socket.emit("game:loan");
     setError("");
   }
   async function copyInvite() {
@@ -173,7 +173,7 @@ function App() {
           </ul>
           {me && me.chips <= 0 && (
             <button className="primary-button start-button loan-button" onClick={takeLoan}>
-              <span>Take loan</span><b>+</b>
+              <span>Take {money(calculateLoanAmount(me.debt))} chip loan</span><b>+</b>
             </button>
           )}
         </aside>

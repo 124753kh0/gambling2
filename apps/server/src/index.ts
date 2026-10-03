@@ -5,6 +5,7 @@ import express from "express";
 import { randomInt, randomUUID } from "node:crypto";
 import { Server } from "socket.io";
 import type { ClientToServerEvents, PlayerAction, RoomSnapshot, ServerToClientEvents, Street } from "../../../shared/protocol.js";
+import { calculateLoanAmount } from "../../../shared/loans.js";
 import { compareHands, evaluateBestHand, type Card } from "./poker.js";
 
 interface Player {
@@ -302,13 +303,14 @@ io.on("connection", (socket) => {
     if (room.street !== "waiting" && room.street !== "showdown") { fail(socket.id, "A hand is already in progress."); return; }
     startHand(room);
   });
-  socket.on("game:loan", ({ amount }) => {
+  socket.on("game:loan", () => {
     const room = roomFor(socket.id);
     if (!room) return;
     const player = room.players.find((entry) => entry.id === socket.id);
     if (!player) return;
-    const loanAmount = takeLoan(player, Number(amount));
-    if (!loanAmount) { fail(socket.id, "Loan amount must be greater than zero."); return; }
+    if (player.chips > 0) { fail(socket.id, "You can only take a loan when your chips are at zero or below."); return; }
+    const loanAmount = takeLoan(player, calculateLoanAmount(player.debt));
+    if (!loanAmount) { fail(socket.id, "Unable to calculate a loan amount."); return; }
     room.message = `${player.name} takes a ${loanAmount} chip loan.`;
     pushLog(room, player.name, `took a ${loanAmount} chip loan`, "good");
     announce(room);
