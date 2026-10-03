@@ -158,7 +158,7 @@ function nextPlayer(room: Room, fromSeat: number, predicate: (player: Player) =>
 }
 function postBlind(player: Player, amount: number): void {
   const toPay = Math.max(0, amount);
-  const available = Math.max(player.chips, 0) + player.debt;
+  const available = Math.max(player.chips, 0);
   const paid = Math.min(toPay, available);
   if (paid < toPay) takeLoan(player, toPay - paid);
   player.chips -= toPay;
@@ -330,7 +330,7 @@ io.on("connection", (socket) => {
     }
     if (action === "call") {
       const toCall = Math.max(0, room.currentBet - player.bet);
-      const available = Math.max(player.chips, 0) + player.debt;
+      const available = Math.max(player.chips, 0);
       const paid = Math.min(toCall, available);
       player.chips -= paid;
       player.bet += paid; player.contributed += paid; player.acted = true;
@@ -341,14 +341,14 @@ io.on("connection", (socket) => {
     }
     if (action === "raise") {
       const target = Number(amount);
-      const maxBet = player.bet + Math.max(player.chips, 0) + player.debt;
+      const maxBet = player.bet + Math.max(player.chips, 0);
       if (!Number.isFinite(target) || target <= room.currentBet || target > maxBet || (target - room.currentBet < room.minRaise && target !== maxBet)) {
         fail(socket.id, `Raise-to must be at least ${room.currentBet + room.minRaise} (or your all-in amount).`); return;
       }
       const increase = target - room.currentBet;
       const paid = target - player.bet;
-      const available = Math.max(player.chips, 0) + player.debt;
-      if (paid > available) takeLoan(player, paid - available);
+      const available = Math.max(player.chips, 0);
+      if (paid > available) { fail(socket.id, "You cannot raise beyond your available chips. Take a loan first."); return; }
       player.chips -= paid; player.bet = target; player.contributed += paid;
       player.allIn = player.chips <= 0;
       room.minRaise = Math.max(room.bigBlind, increase); room.currentBet = target;

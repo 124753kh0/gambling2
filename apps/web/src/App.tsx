@@ -45,7 +45,8 @@ function App() {
   const isMyTurn = Boolean(me?.isTurn);
   const callAmount = me && snapshot ? Math.max(0, snapshot.currentBet - me.bet) : 0;
   const minRaiseTo = snapshot ? snapshot.currentBet + snapshot.minRaise : 40;
-  const canRaise = Boolean(me && snapshot && me.chips + me.bet > snapshot.currentBet && (me.chips + me.bet >= minRaiseTo));
+  const maxRaiseTo = me ? me.bet + Math.max(me.chips, 0) : minRaiseTo;
+  const canRaise = Boolean(me && snapshot && maxRaiseTo > snapshot.currentBet && maxRaiseTo >= minRaiseTo);
   const playersAtTable = useMemo(() => snapshot?.players ?? [], [snapshot?.players]);
 
   function rememberName() {
@@ -152,7 +153,7 @@ function App() {
           {(snapshot.street === "waiting" || snapshot.street === "showdown") ? <button className="primary-button start-button" onClick={() => socket?.emit("game:start")} disabled={playersAtTable.filter((player) => player.connected).length < 2}><span>{snapshot.street === "waiting" ? "Deal the cards" : "Play another hand"}</span><b>↗</b></button> : <div className={`action-buttons ${isMyTurn ? "enabled" : ""}`}>
             <button className="action-button fold-button" disabled={!isMyTurn} onClick={() => act("fold")}>Fold</button>
             <button className="action-button" disabled={!isMyTurn} onClick={() => act(callAmount === 0 ? "check" : "call")}>{callAmount === 0 ? "Check" : `Call ${money(callAmount)}`}</button>
-            <div className="raise-control"><label htmlFor="raise-slider">RAISE TO <b>{money(raiseTo)}</b></label><input id="raise-slider" type="range" min={Math.max(minRaiseTo, snapshot.bigBlind)} max={Math.max(minRaiseTo, (me?.chips ?? 0) + (me?.debt ?? 0) + (me?.bet ?? 0))} step={snapshot.bigBlind} value={Math.min(raiseTo, Math.max(minRaiseTo, (me?.chips ?? 0) + (me?.debt ?? 0) + (me?.bet ?? 0)))} onChange={(event) => setRaiseTo(Number(event.target.value))} disabled={!isMyTurn || !canRaise} /><button className="raise-button" disabled={!isMyTurn || !canRaise} onClick={() => act("raise", raiseTo)}>Raise <span>↗</span></button></div>
+            <div className="raise-control"><label htmlFor="raise-slider">RAISE TO <b>{money(raiseTo)}</b></label><input id="raise-slider" type="range" min={Math.max(minRaiseTo, snapshot.bigBlind)} max={Math.max(minRaiseTo, maxRaiseTo)} step={snapshot.bigBlind} value={Math.min(raiseTo, Math.max(minRaiseTo, maxRaiseTo))} onChange={(event) => setRaiseTo(Number(event.target.value))} disabled={!isMyTurn || !canRaise} /><button className="raise-button" disabled={!isMyTurn || !canRaise} onClick={() => act("raise", raiseTo)}>Raise <span>↗</span></button></div>
           </div>}
         </div>
         <aside className="info-panel">
