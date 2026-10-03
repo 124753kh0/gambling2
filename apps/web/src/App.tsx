@@ -12,7 +12,7 @@ function PlayingCard({ card, faceDown = false, small = false }: { card?: string;
   if (faceDown || !card) return <div className={`playing-card card-back ${small ? "small" : ""}`} aria-label="Face down card"><span>✦</span></div>;
   const suit = card.slice(-1);
   const red = suit === "♥" || suit === "♦";
-  return <div className={`playing-card ${red ? "red" : ""} ${small ? "small" : ""}`} aria-label={card}><b>{card.slice(0, -1)}</b><span>{suit}</span></div>;
+  return <div className={`playing-card ${red ? "red" : ""} ${small ? "small" : ""}`} aria-label={card}><b>{card.slice(0, -1)}</b><span style={{ fontFamily: '"Segoe UI Symbol", "Apple Symbols", "Noto Sans Symbols", sans-serif' }}>{suit}</span></div>;
 }
 
 function App() {
