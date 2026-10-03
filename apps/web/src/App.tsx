@@ -133,7 +133,10 @@ function App() {
                 <div className="seat-cards">{player.cards.length ? player.cards.map((card, index) => <PlayingCard key={index} card={card} small />) : snapshot.street !== "waiting" && snapshot.street !== "showdown" && !player.folded ? <><PlayingCard faceDown small /><PlayingCard faceDown small /></> : null}</div>
                 <div className="avatar-wrap"><div className="avatar">{player.name.slice(0, 1).toUpperCase()}</div>{player.isDealer && <span className="dealer-chip">D</span>}</div>
                 <div className="player-name">{player.name}{player.id === me?.id && <span className="you-tag">YOU</span>}</div>
-                <div className="player-stack">{money(player.chips)} <span>CHIPS</span></div>
+                <div className="player-stack-row">
+                  <div className="player-stack">{money(player.chips)} <span>CHIPS</span></div>
+                  {player.debt > 0 && <div className="player-debt">DEBT {money(player.debt)}</div>}
+                </div>
                 {!player.connected && <div className="player-status">RECONNECTING</div>}
                 {player.folded && snapshot.street !== "waiting" && <div className="player-status">FOLDED</div>}
                 {player.bet > 0 && <div className="bet-chip">{money(player.bet)}</div>}
