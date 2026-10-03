@@ -120,7 +120,15 @@ function App() {
           <div className="felt-table">
             <div className="felt-inner" />
             <div className="table-topline"><span><i className="live-dot" /> FRIENDS ONLY</span><span>NO LIMIT · HOLD’EM</span></div>
-            <div className="pot-display"><span className="pot-icon">◆</span><span className="pot-label">TOTAL POT</span><strong>{money(snapshot.pot)}</strong><small>PLAY CHIPS</small></div>
+            <div className="pot-display" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                <div><span className="pot-label">MAIN POT</span><strong style={{ display: "block" }}>{money(snapshot.mainPot)}</strong></div>
+                {snapshot.sidePots.map((sidePot, index) => (
+                  <div key={index}><span className="pot-label">SIDE POT {index + 1}</span><strong style={{ display: "block" }}>{money(sidePot)}</strong></div>
+                ))}
+              </div>
+              <small>TOTAL {money(snapshot.pot)} PLAY CHIPS</small>
+            </div>
             <div className="community-row" aria-label={`${snapshot.communityCards.length} community cards`}>
               {Array.from({ length: 5 }, (_, index) => <PlayingCard key={index} card={snapshot.communityCards[index]} small />)}
             </div>
@@ -150,7 +158,7 @@ function App() {
         </div>
         <div className="controls-row">
           <div className="action-hint"><span className="hint-icon">♧</span><span><b>{isMyTurn ? "Your move" : snapshot.street === "waiting" ? "Make it a full table" : snapshot.street === "showdown" ? "Hand complete" : "You're up next"}</b><small>{isMyTurn ? `Call ${money(callAmount)} or make it yours.` : snapshot.street === "waiting" ? `${playersAtTable.length} ${playersAtTable.length === 1 ? "player" : "players"} seated · share your room code.` : snapshot.street === "showdown" ? "Ready when you are for another hand." : "Watch the table — your turn is coming."}</small></span></div>
-          {(snapshot.street === "waiting" || snapshot.street === "showdown") ? <button className="primary-button start-button" onClick={() => socket?.emit("game:start")} disabled={playersAtTable.filter((player) => player.connected).length < 2}><span>{snapshot.street === "waiting" ? "Deal the cards" : "Play another hand"}</span><b>↗</b></button> : <div className={`action-buttons ${isMyTurn ? "enabled" : ""}`}>
+          {(snapshot.street === "waiting" || snapshot.street === "showdown") ? <button className="primary-button start-button" onClick={() => socket?.emit("game:start")} disabled={!snapshot.you?.isHost || playersAtTable.filter((player) => player.connected).length < 2}><span>{snapshot.you?.isHost ? snapshot.street === "waiting" ? "Deal the cards" : "Play another hand" : "Waiting for host"}</span><b>↗</b></button> : <div className={`action-buttons ${isMyTurn ? "enabled" : ""}`}>
             <button className="action-button fold-button" disabled={!isMyTurn} onClick={() => act("fold")}>Fold</button>
             <button className="action-button" disabled={!isMyTurn} onClick={() => act(callAmount === 0 ? "check" : "call")}>{callAmount === 0 ? "Check" : `Call ${money(callAmount)}`}</button>
             <div className="raise-control"><label htmlFor="raise-slider">RAISE TO <b>{money(raiseTo)}</b></label><input id="raise-slider" type="range" min={Math.max(minRaiseTo, snapshot.bigBlind)} max={Math.max(minRaiseTo, maxRaiseTo)} step={snapshot.bigBlind} value={Math.min(raiseTo, Math.max(minRaiseTo, maxRaiseTo))} onChange={(event) => setRaiseTo(Number(event.target.value))} disabled={!isMyTurn || !canRaise} /><button className="raise-button" disabled={!isMyTurn || !canRaise} onClick={() => act("raise", raiseTo)}>Raise <span>↗</span></button></div>
@@ -172,9 +180,9 @@ function App() {
               </li>
             ))}
           </ul>
-          {me && me.debt > 0 && (
+          {me && me.chips <= 0 && (
             <button className="primary-button start-button loan-button" onClick={takeLoan}>
-              <span>Take {money(calculateLoanAmount(me.debt))} chip loan</span><b>+</b>
+              <span>Take {money(calculateLoanAmount(me.chips))} chip loan</span><b>+</b>
             </button>
           )}
         </aside>

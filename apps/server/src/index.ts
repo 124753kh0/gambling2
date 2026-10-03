@@ -30,6 +30,7 @@ interface ActionFeedItem {
 }
 interface Room {
   id: string;
+  hostId: string;
   players: Player[];
   deck: Card[];
   community: Card[];
@@ -104,6 +105,12 @@ function settleWinnings(player: Player, amount: number): void {
   player.chips += payout;
 }
 function announce(room: Room): void {
+  const totalPot = room.pot + room.players.reduce((sum, seat) => sum + seat.bet, 0);
+  const sidePots = buildSidePots(room.players.map((seat) => ({
+    id: seat.id,
+    amount: seat.contributed,
+    folded: seat.folded,
+  }))).slice(1).map((sidePot) => sidePot.amount);
   for (const player of room.players) {
     const snapshot: RoomSnapshot = {
       roomId: room.id,
@@ -116,12 +123,13 @@ function announce(room: Room): void {
         isTurn: seat.id === room.turnId,
         cards: seat.id === player.id || (room.street === "showdown" && !seat.folded) ? seat.cards.map(cardText) : [],
       })),
-      communityCards: room.community.map(cardText), pot: room.pot + room.players.reduce((sum, seat) => sum + seat.bet, 0),
+      communityCards: room.community.map(cardText), pot: totalPot,
+      mainPot: totalPot - sidePots.reduce((sum, sidePot) => sum + sidePot, 0), sidePots,
       street: room.street, currentBet: room.currentBet, minRaise: room.minRaise,
       smallBlind: room.smallBlind, bigBlind: room.bigBlind, handNumber: room.handNumber,
       message: room.message, winnerIds: room.winnerIds,
       log: room.log,
-      you: { id: player.id, name: player.name },
+      you: { id: player.id, name: player.name, isHost: player.id === room.hostId },
     };
     io.to(player.id).emit("state", snapshot);
   }
@@ -139,7 +147,7 @@ function addPlayer(room: Room, id: string, name: string): boolean {
 }
 function newRoom(id: string, playerId: string, name: string): Room {
   const room: Room = {
-    id, players: [], deck: [], community: [], pot: 0, street: "waiting", currentBet: 0,
+    id, hostId: playerId, players: [], deck: [], community: [], pot: 0, street: "waiting", currentBet: 0,
     minRaise: 20, smallBlind: 10, bigBlind: 20, handNumber: 0, dealerSeat: -1,
     turnId: null, message: "Waiting for another player to join.", winnerIds: [], smallBlindId: null, bigBlindId: null,
     log: [{ player: "System", text: "Table created. Add players and deal a hand.", tone: "neutral" }],
@@ -302,6 +310,7 @@ io.on("connection", (socket) => {
   socket.on("game:start", () => {
     const room = roomFor(socket.id);
     if (!room) return;
+    if (room.hostId !== socket.id) { fail(socket.id, "Only the host can start a hand."); return; }
     if (room.street !== "waiting" && room.street !== "showdown") { fail(socket.id, "A hand is already in progress."); return; }
     startHand(room);
   });
@@ -310,8 +319,8 @@ io.on("connection", (socket) => {
     if (!room) return;
     const player = room.players.find((entry) => entry.id === socket.id);
     if (!player) return;
-    if (player.debt <= 0) { fail(socket.id, "You need outstanding debt to take a loan."); return; }
-    const loanAmount = takeLoan(player, calculateLoanAmount(player.debt));
+    if (player.chips > 0) { fail(socket.id, "You can only take a loan when your chips are at zero or below."); return; }
+    const loanAmount = takeLoan(player, calculateLoanAmount(player.chips));
     if (!loanAmount) { fail(socket.id, "Unable to calculate a loan amount."); return; }
     room.message = `${player.name} takes a ${loanAmount} chip loan.`;
     pushLog(room, player.name, `took a ${loanAmount} chip loan`, "good");

@@ -1,6 +1,6 @@
 export const LOAN_BONUS = 250;
 
-export function calculateLoanAmount(debt: number): number {
-  if (!Number.isFinite(debt)) return 0;
-  return Math.max(0, Math.round(debt)) + LOAN_BONUS;
+export function calculateLoanAmount(chips: number): number {
+  if (!Number.isFinite(chips) || chips > 0) return 0;
+  return Math.ceil(-chips) + LOAN_BONUS;
 }

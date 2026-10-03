@@ -26,13 +26,16 @@ test("street bets accumulate in the pot without disappearing between streets", (
 });
 
 test("side pots include each contribution tier and exclude folded players from winning", () => {
-  assert.deepEqual(buildSidePots([
+  const pots = buildSidePots([
     { id: "short-stack", amount: 100, folded: false },
     { id: "folded", amount: 250, folded: true },
     { id: "deep-stack", amount: 500, folded: false },
-  ]), [
+  ]);
+
+  assert.deepEqual(pots, [
     { amount: 300, eligibleIds: ["short-stack", "deep-stack"] },
     { amount: 300, eligibleIds: ["deep-stack"] },
     { amount: 250, eligibleIds: ["deep-stack"] },
   ]);
+  assert.equal(pots[0].amount + pots.slice(1).reduce((total, pot) => total + pot.amount, 0), 850);
 });

@@ -29,6 +29,8 @@ export interface RoomSnapshot {
   players: PublicPlayer[];
   communityCards: string[];
   pot: number;
+  mainPot: number;
+  sidePots: number[];
   street: Street;
   currentBet: number;
   minRaise: number;
@@ -38,7 +40,7 @@ export interface RoomSnapshot {
   message: string;
   winnerIds: string[];
   log: ActionFeedItem[];
-  you: { id: string; name: string } | null;
+  you: { id: string; name: string; isHost: boolean } | null;
 }
 
 export interface ServerToClientEvents {
