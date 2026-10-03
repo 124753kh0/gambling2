@@ -6,6 +6,7 @@ import { randomInt, randomUUID } from "node:crypto";
 import { Server } from "socket.io";
 import type { ClientToServerEvents, PlayerAction, RoomSnapshot, ServerToClientEvents, Street } from "../../../shared/protocol.js";
 import { calculateLoanAmount } from "../../../shared/loans.js";
+import { collectStreetBets } from "./pot.js";
 import { compareHands, evaluateBestHand, type Card } from "./poker.js";
 
 interface Player {
@@ -203,9 +204,7 @@ function startHand(room: Room): void {
   continueIfReady(room);
 }
 function payStreet(room: Room): void {
-  room.pot += room.players.reduce((sum, player) => sum + player.bet, 0);
-  room.players.forEach((player) => { player.bet = 0; });
-  room.currentBet = 0;
+  collectStreetBets(room);
 }
 function awardUncontested(room: Room, winner: Player): void {
   payStreet(room);
@@ -247,11 +246,11 @@ function finishHand(room: Room): void {
   announce(room);
 }
 function progressStreet(room: Room): void {
+  payStreet(room);
   if (room.street === "preflop") { room.deck.pop(); room.community.push(...room.deck.splice(-3)); room.street = "flop"; }
   else if (room.street === "flop" || room.street === "turn") { room.deck.pop(); room.community.push(room.deck.pop()!); room.street = room.community.length === 4 ? "turn" : "river"; }
   else { awardShowdown(room); return; }
   room.players.forEach((player) => { player.bet = 0; player.acted = player.folded || player.chips === 0; });
-  room.currentBet = 0;
   room.minRaise = room.bigBlind;
   room.turnId = nextPlayer(room, room.dealerSeat, (player) => player.connected && !player.folded)?.id ?? null;
   room.message = room.turnId ? `${room.street[0].toUpperCase()}${room.street.slice(1)} · action is live.` : `${room.street[0].toUpperCase()}${room.street.slice(1)} · all remaining players are all-in.`;
