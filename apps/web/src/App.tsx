@@ -72,6 +72,12 @@ function App() {
     socket?.emit("game:action", { action, amount });
     setError("");
   }
+  function takeLoan() {
+    if (!socket || !connected) return;
+    const amount = Math.max(250, Math.min(1000, (me?.debt ?? 0) ? 250 : 500));
+    socket.emit("game:loan", { amount });
+    setError("");
+  }
   async function copyInvite() {
     if (!snapshot) return;
     try {
@@ -140,10 +146,10 @@ function App() {
         </div>
         <div className="controls-row">
           <div className="action-hint"><span className="hint-icon">♧</span><span><b>{isMyTurn ? "Your move" : snapshot.street === "waiting" ? "Make it a full table" : snapshot.street === "showdown" ? "Hand complete" : "You're up next"}</b><small>{isMyTurn ? `Call ${money(callAmount)} or make it yours.` : snapshot.street === "waiting" ? `${playersAtTable.length} ${playersAtTable.length === 1 ? "player" : "players"} seated · share your room code.` : snapshot.street === "showdown" ? "Ready when you are for another hand." : "Watch the table — your turn is coming."}</small></span></div>
-          {(snapshot.street === "waiting" || snapshot.street === "showdown") ? <button className="primary-button start-button" onClick={() => socket?.emit("game:start")} disabled={playersAtTable.filter((player) => player.connected && player.chips > 0).length < 2}><span>{snapshot.street === "waiting" ? "Deal the cards" : "Play another hand"}</span><b>↗</b></button> : <div className={`action-buttons ${isMyTurn ? "enabled" : ""}`}>
+          {(snapshot.street === "waiting" || snapshot.street === "showdown") ? <button className="primary-button start-button" onClick={() => socket?.emit("game:start")} disabled={playersAtTable.filter((player) => player.connected).length < 2}><span>{snapshot.street === "waiting" ? "Deal the cards" : "Play another hand"}</span><b>↗</b></button> : <div className={`action-buttons ${isMyTurn ? "enabled" : ""}`}>
             <button className="action-button fold-button" disabled={!isMyTurn} onClick={() => act("fold")}>Fold</button>
             <button className="action-button" disabled={!isMyTurn} onClick={() => act(callAmount === 0 ? "check" : "call")}>{callAmount === 0 ? "Check" : `Call ${money(callAmount)}`}</button>
-            <div className="raise-control"><label htmlFor="raise-slider">RAISE TO <b>{money(raiseTo)}</b></label><input id="raise-slider" type="range" min={Math.max(minRaiseTo, snapshot.bigBlind)} max={Math.max(minRaiseTo, (me?.chips ?? 0) + (me?.bet ?? 0))} step={snapshot.bigBlind} value={Math.min(raiseTo, Math.max(minRaiseTo, (me?.chips ?? 0) + (me?.bet ?? 0)))} onChange={(event) => setRaiseTo(Number(event.target.value))} disabled={!isMyTurn || !canRaise} /><button className="raise-button" disabled={!isMyTurn || !canRaise} onClick={() => act("raise", raiseTo)}>Raise <span>↗</span></button></div>
+            <div className="raise-control"><label htmlFor="raise-slider">RAISE TO <b>{money(raiseTo)}</b></label><input id="raise-slider" type="range" min={Math.max(minRaiseTo, snapshot.bigBlind)} max={Math.max(minRaiseTo, (me?.chips ?? 0) + (me?.debt ?? 0) + (me?.bet ?? 0))} step={snapshot.bigBlind} value={Math.min(raiseTo, Math.max(minRaiseTo, (me?.chips ?? 0) + (me?.debt ?? 0) + (me?.bet ?? 0)))} onChange={(event) => setRaiseTo(Number(event.target.value))} disabled={!isMyTurn || !canRaise} /><button className="raise-button" disabled={!isMyTurn || !canRaise} onClick={() => act("raise", raiseTo)}>Raise <span>↗</span></button></div>
           </div>}
         </div>
         <aside className="info-panel">
@@ -152,7 +158,7 @@ function App() {
             <div><strong>{playersAtTable.filter((player) => player.connected).length}</strong><span>at table</span></div>
             <div><strong>{snapshot.communityCards.filter(Boolean).length}</strong><span>board cards</span></div>
             <div><strong>{money(snapshot.pot)}</strong><span>pot value</span></div>
-            <div><strong>{money(snapshot.currentBet)}</strong><span>current bet</span></div>
+            <div><strong>{money(me?.debt ?? 0)}</strong><span>your debt</span></div>
           </div>
           <ul className="feed-list">
             {snapshot.log.map((entry, index) => (
@@ -162,6 +168,11 @@ function App() {
               </li>
             ))}
           </ul>
+          {me && me.chips <= 0 && (
+            <button className="primary-button start-button loan-button" onClick={takeLoan}>
+              <span>Take loan</span><b>+</b>
+            </button>
+          )}
         </aside>
         <div className="table-caption"><span>{playersAtTable.length}/6 SEATS <b>·</b> {activePlayers.length} IN HAND</span><span>PLAY-MONEY TABLE <b>·</b> NO CASH VALUE</span></div>
       </section>

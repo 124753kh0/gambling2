@@ -12,6 +12,7 @@ interface Player {
   name: string;
   seat: number;
   chips: number;
+  debt: number;
   bet: number;
   contributed: number;
   folded: boolean;
@@ -81,12 +82,30 @@ function pushLog(room: Room, player: string, text: string, tone: ActionFeedItem[
   room.log.unshift({ player, text, tone });
   room.log = room.log.slice(0, 8);
 }
+function takeLoan(player: Player, amount: number): number {
+  const loan = Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
+  if (loan <= 0) return 0;
+  player.chips += loan;
+  player.debt += loan;
+  return loan;
+}
+function settleWinnings(player: Player, amount: number): void {
+  const payout = Number.isFinite(amount) ? Math.max(0, Math.round(amount)) : 0;
+  if (payout <= 0) return;
+  if (player.debt > 0) {
+    const repaid = Math.min(player.debt, payout);
+    player.debt -= repaid;
+    player.chips += payout - repaid;
+    return;
+  }
+  player.chips += payout;
+}
 function announce(room: Room): void {
   for (const player of room.players) {
     const snapshot: RoomSnapshot = {
       roomId: room.id,
       players: room.players.map((seat) => ({
-        id: seat.id, name: seat.name, seat: seat.seat, chips: seat.chips, bet: seat.bet,
+        id: seat.id, name: seat.name, seat: seat.seat, chips: seat.chips, debt: seat.debt, bet: seat.bet,
         folded: seat.folded, connected: seat.connected,
         isDealer: seat.seat === room.dealerSeat && room.street !== "waiting",
         isSmallBlind: room.smallBlindId === seat.id && room.street !== "waiting",
@@ -112,7 +131,7 @@ function addPlayer(room: Room, id: string, name: string): boolean {
   if (room.players.length >= 6) return false;
   const seat = [0, 1, 2, 3, 4, 5].find((number) => room.players.every((p) => p.seat !== number));
   if (seat === undefined) return false;
-  room.players.push({ id, name, seat, chips: 1000, bet: 0, contributed: 0, folded: false, connected: true, acted: false, cards: [] });
+  room.players.push({ id, name, seat, chips: 1000, debt: 0, bet: 0, contributed: 0, folded: false, connected: true, acted: false, cards: [] });
   return true;
 }
 function newRoom(id: string, playerId: string, name: string): Room {
@@ -135,22 +154,25 @@ function nextPlayer(room: Room, fromSeat: number, predicate: (player: Player) =>
   return undefined;
 }
 function postBlind(player: Player, amount: number): void {
-  const paid = Math.min(player.chips, amount);
-  player.chips -= paid;
-  player.bet += paid;
-  player.contributed += paid;
+  const toPay = Math.max(0, amount);
+  const available = Math.max(player.chips, 0) + player.debt;
+  const paid = Math.min(toPay, available);
+  if (paid < toPay) takeLoan(player, toPay - paid);
+  player.chips -= toPay;
+  player.bet += toPay;
+  player.contributed += toPay;
 }
 function deal(room: Room, player: Player): void {
   const card = room.deck.pop();
   if (card) player.cards.push(card);
 }
 function startHand(room: Room): void {
-  if (room.players.filter((player) => player.connected && player.chips > 0).length < 2) {
-    room.message = "Two players with chips are needed to start.";
+  if (room.players.filter((player) => player.connected).length < 2) {
+    room.message = "Two players are needed to start.";
     announce(room);
     return;
   }
-  const eligible = room.players.filter((player) => player.connected && player.chips > 0).sort((a, b) => a.seat - b.seat);
+  const eligible = room.players.filter((player) => player.connected).sort((a, b) => a.seat - b.seat);
   if (!eligible.some((player) => player.seat > room.dealerSeat)) room.dealerSeat = eligible[0].seat - 1;
   room.dealerSeat = nextPlayer(room, room.dealerSeat, (player) => eligible.includes(player))?.seat ?? eligible[0].seat;
   room.handNumber += 1;
@@ -161,7 +183,7 @@ function startHand(room: Room): void {
   room.minRaise = room.bigBlind;
   room.winnerIds = [];
   room.players.forEach((player) => {
-    player.bet = 0; player.contributed = 0; player.folded = !player.connected || player.chips <= 0;
+    player.bet = 0; player.contributed = 0; player.folded = !player.connected;
     player.acted = false; player.cards = [];
   });
   eligible.forEach((player) => { deal(room, player); deal(room, player); });
@@ -174,7 +196,7 @@ function startHand(room: Room): void {
   postBlind(bigBlind, room.bigBlind);
   room.currentBet = Math.max(...eligible.map((player) => player.bet));
   room.street = "preflop";
-  room.turnId = nextPlayer(room, bigBlind.seat, (player) => !player.folded && player.chips > 0)?.id ?? null;
+  room.turnId = nextPlayer(room, bigBlind.seat, (player) => player.connected && !player.folded)?.id ?? null;
   room.message = `Hand ${room.handNumber} · ${smallBlind.name} posts ${room.smallBlind}, ${bigBlind.name} posts ${room.bigBlind}.`;
   pushLog(room, "System", `Hand ${room.handNumber} started. ${smallBlind.name} is small blind and ${bigBlind.name} is big blind.`, "good");
   continueIfReady(room);
@@ -186,7 +208,7 @@ function payStreet(room: Room): void {
 }
 function awardUncontested(room: Room, winner: Player): void {
   payStreet(room);
-  winner.chips += room.pot;
+  settleWinnings(winner, room.pot);
   room.message = `${winner.name} takes the pot — everyone else folded.`;
   room.winnerIds = [winner.id];
   finishHand(room);
@@ -211,7 +233,7 @@ function awardShowdown(room: Room): void {
     let remainder = sidePot - share * roundWinners.length;
     for (const player of roundWinners) { if (remainder-- <= 0) break; payouts.set(player.id, (payouts.get(player.id) ?? 0) + 1); }
   }
-  payouts.forEach((amount, id) => { const player = room.players.find((entry) => entry.id === id); if (player) player.chips += amount; });
+  payouts.forEach((amount, id) => { const player = room.players.find((entry) => entry.id === id); if (player) settleWinnings(player, amount); });
   room.winnerIds = [...winners];
   const names = room.players.filter((player) => winners.has(player.id)).map((player) => player.name);
   room.message = `${names.join(" & ")} win${names.length === 1 ? "s" : ""} · ${evaluateBestHand([...room.players.find((p) => winners.has(p.id))!.cards, ...room.community]).label}`;
@@ -230,7 +252,7 @@ function progressStreet(room: Room): void {
   room.players.forEach((player) => { player.bet = 0; player.acted = player.folded || player.chips === 0; });
   room.currentBet = 0;
   room.minRaise = room.bigBlind;
-  room.turnId = nextPlayer(room, room.dealerSeat, (player) => !player.folded && player.chips > 0)?.id ?? null;
+  room.turnId = nextPlayer(room, room.dealerSeat, (player) => player.connected && !player.folded)?.id ?? null;
   room.message = room.turnId ? `${room.street[0].toUpperCase()}${room.street.slice(1)} · action is live.` : `${room.street[0].toUpperCase()}${room.street.slice(1)} · all remaining players are all-in.`;
   continueIfReady(room);
 }
@@ -238,7 +260,7 @@ function continueIfReady(room: Room): void {
   if (room.street === "waiting" || room.street === "showdown") { announce(room); return; }
   const alive = room.players.filter((player) => !player.folded);
   if (alive.length === 1) { awardUncontested(room, alive[0]); return; }
-  const canAct = alive.filter((player) => player.chips > 0);
+  const canAct = alive.filter((player) => player.connected && !player.folded);
   if (canAct.length === 0 || (canAct.every((player) => player.acted && player.bet === room.currentBet))) {
     if (room.street === "river") awardShowdown(room);
     else progressStreet(room);
@@ -246,7 +268,7 @@ function continueIfReady(room: Room): void {
   }
   if (!room.turnId || !canAct.some((player) => player.id === room.turnId)) {
     const previousSeat = room.players.find((player) => player.id === room.turnId)?.seat ?? room.dealerSeat;
-    room.turnId = nextPlayer(room, previousSeat, (player) => !player.folded && player.chips > 0 && (!player.acted || player.bet < room.currentBet))?.id ?? null;
+    room.turnId = nextPlayer(room, previousSeat, (player) => player.connected && !player.folded && (!player.acted || player.bet < room.currentBet))?.id ?? null;
   }
   announce(room);
 }
@@ -280,6 +302,17 @@ io.on("connection", (socket) => {
     if (room.street !== "waiting" && room.street !== "showdown") { fail(socket.id, "A hand is already in progress."); return; }
     startHand(room);
   });
+  socket.on("game:loan", ({ amount }) => {
+    const room = roomFor(socket.id);
+    if (!room) return;
+    const player = room.players.find((entry) => entry.id === socket.id);
+    if (!player) return;
+    const loanAmount = takeLoan(player, Number(amount));
+    if (!loanAmount) { fail(socket.id, "Loan amount must be greater than zero."); return; }
+    room.message = `${player.name} takes a ${loanAmount} chip loan.`;
+    pushLog(room, player.name, `took a ${loanAmount} chip loan`, "good");
+    announce(room);
+  });
   socket.on("game:action", ({ action, amount }) => {
     const room = roomFor(socket.id);
     if (!room || room.turnId !== socket.id || room.street === "waiting" || room.street === "showdown") { fail(socket.id, "It is not your turn."); return; }
@@ -291,26 +324,33 @@ io.on("connection", (socket) => {
       player.acted = true; room.message = `${player.name} checks.`; pushLog(room, player.name, "checked", "neutral");
     }
     if (action === "call") {
-      const paid = Math.min(player.chips, Math.max(0, room.currentBet - player.bet));
-      player.chips -= paid; player.bet += paid; player.contributed += paid; player.acted = true;
-      room.message = `${player.name} ${paid === 0 ? "checks" : `calls ${paid}`}.`;
-      pushLog(room, player.name, paid === 0 ? "checked" : `called ${paid}`, "neutral");
+      const toCall = Math.max(0, room.currentBet - player.bet);
+      const available = Math.max(player.chips, 0) + player.debt;
+      const paid = Math.min(toCall, available);
+      const loanNeeded = toCall - paid;
+      if (loanNeeded > 0) takeLoan(player, loanNeeded);
+      player.chips -= toCall;
+      player.bet += toCall; player.contributed += toCall; player.acted = true;
+      room.message = `${player.name} ${toCall === 0 ? "checks" : `calls ${toCall}`}.`;
+      pushLog(room, player.name, toCall === 0 ? "checked" : `called ${toCall}`, "neutral");
     }
     if (action === "raise") {
       const target = Number(amount);
-      const maxBet = player.bet + player.chips;
+      const maxBet = player.bet + Math.max(player.chips, 0) + player.debt;
       if (!Number.isFinite(target) || target <= room.currentBet || target > maxBet || (target - room.currentBet < room.minRaise && target !== maxBet)) {
         fail(socket.id, `Raise-to must be at least ${room.currentBet + room.minRaise} (or your all-in amount).`); return;
       }
       const increase = target - room.currentBet;
       const paid = target - player.bet;
+      const available = Math.max(player.chips, 0) + player.debt;
+      if (paid > available) takeLoan(player, paid - available);
       player.chips -= paid; player.bet = target; player.contributed += paid;
       room.minRaise = Math.max(room.bigBlind, increase); room.currentBet = target;
-      room.players.forEach((other) => { if (!other.folded && other.id !== player.id && other.chips > 0) other.acted = false; });
+      room.players.forEach((other) => { if (!other.folded && other.id !== player.id && other.connected) other.acted = false; });
       player.acted = true; room.message = `${player.name} raises to ${target}.`; pushLog(room, player.name, `raised to ${target}`, "good");
     }
     const previousSeat = player.seat;
-    room.turnId = nextPlayer(room, previousSeat, (other) => !other.folded && other.chips > 0 && (!other.acted || other.bet < room.currentBet))?.id ?? null;
+    room.turnId = nextPlayer(room, previousSeat, (other) => other.connected && !other.folded && (!other.acted || other.bet < room.currentBet))?.id ?? null;
     continueIfReady(room);
   });
   socket.on("disconnect", () => {
@@ -322,7 +362,7 @@ io.on("connection", (socket) => {
       player.folded = true;
       player.acted = true;
       if (player.id === room.turnId) {
-        room.turnId = nextPlayer(room, player.seat, (other) => !other.folded && other.chips > 0 && (!other.acted || other.bet < room.currentBet))?.id ?? null;
+        room.turnId = nextPlayer(room, player.seat, (other) => other.connected && !other.folded && (!other.acted || other.bet < room.currentBet))?.id ?? null;
       }
       continueIfReady(room);
     } else announce(room);

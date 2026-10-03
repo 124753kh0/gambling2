@@ -6,6 +6,7 @@ export interface PublicPlayer {
   name: string;
   seat: number;
   chips: number;
+  debt: number;
   bet: number;
   folded: boolean;
   connected: boolean;
@@ -48,5 +49,6 @@ export interface ClientToServerEvents {
   "room:create": (payload: { name: string }, callback: (roomId: string) => void) => void;
   "room:join": (payload: { roomId: string; name: string }, callback: (result: { roomId: string } | { error: string }) => void) => void;
   "game:start": () => void;
+  "game:loan": (payload: { amount: number }) => void;
   "game:action": (payload: { action: PlayerAction; amount?: number }) => void;
 }
