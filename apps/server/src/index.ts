@@ -19,6 +19,11 @@ interface Player {
   acted: boolean;
   cards: Card[];
 }
+interface ActionFeedItem {
+  player: string;
+  text: string;
+  tone: "neutral" | "good" | "bad";
+}
 interface Room {
   id: string;
   players: Player[];
@@ -37,6 +42,7 @@ interface Room {
   winnerIds: string[];
   smallBlindId: string | null;
   bigBlindId: string | null;
+  log: ActionFeedItem[];
 }
 
 const rooms = new Map<string, Room>();
@@ -71,6 +77,10 @@ function roomFor(socketId: string): Room | undefined {
   const roomId = io.sockets.sockets.get(socketId)?.data.roomId as string | undefined;
   return roomId ? rooms.get(roomId) : undefined;
 }
+function pushLog(room: Room, player: string, text: string, tone: ActionFeedItem["tone"] = "neutral"): void {
+  room.log.unshift({ player, text, tone });
+  room.log = room.log.slice(0, 8);
+}
 function announce(room: Room): void {
   for (const player of room.players) {
     const snapshot: RoomSnapshot = {
@@ -88,6 +98,7 @@ function announce(room: Room): void {
       street: room.street, currentBet: room.currentBet, minRaise: room.minRaise,
       smallBlind: room.smallBlind, bigBlind: room.bigBlind, handNumber: room.handNumber,
       message: room.message, winnerIds: room.winnerIds,
+      log: room.log,
       you: { id: player.id, name: player.name },
     };
     io.to(player.id).emit("state", snapshot);
@@ -109,6 +120,7 @@ function newRoom(id: string, playerId: string, name: string): Room {
     id, players: [], deck: [], community: [], pot: 0, street: "waiting", currentBet: 0,
     minRaise: 20, smallBlind: 10, bigBlind: 20, handNumber: 0, dealerSeat: -1,
     turnId: null, message: "Waiting for another player to join.", winnerIds: [], smallBlindId: null, bigBlindId: null,
+    log: [{ player: "System", text: "Table created. Add players and deal a hand.", tone: "neutral" }],
   };
   addPlayer(room, playerId, name);
   rooms.set(id, room);
@@ -164,6 +176,7 @@ function startHand(room: Room): void {
   room.street = "preflop";
   room.turnId = nextPlayer(room, bigBlind.seat, (player) => !player.folded && player.chips > 0)?.id ?? null;
   room.message = `Hand ${room.handNumber} · ${smallBlind.name} posts ${room.smallBlind}, ${bigBlind.name} posts ${room.bigBlind}.`;
+  pushLog(room, "System", `Hand ${room.handNumber} started. ${smallBlind.name} is small blind and ${bigBlind.name} is big blind.`, "good");
   continueIfReady(room);
 }
 function payStreet(room: Room): void {
@@ -256,7 +269,9 @@ io.on("connection", (socket) => {
     socket.data.roomId = room.id;
     socket.join(room.id);
     callback({ roomId: room.id });
-    room.message = `${cleanName(name)} joined the table.`;
+    const joinedName = cleanName(name);
+    room.message = `${joinedName} joined the table.`;
+    pushLog(room, joinedName, "joined the table", "neutral");
     announce(room);
   });
   socket.on("game:start", () => {
@@ -270,15 +285,16 @@ io.on("connection", (socket) => {
     if (!room || room.turnId !== socket.id || room.street === "waiting" || room.street === "showdown") { fail(socket.id, "It is not your turn."); return; }
     const player = room.players.find((entry) => entry.id === socket.id)!;
     if (!( ["fold", "check", "call", "raise"] as PlayerAction[]).includes(action)) { fail(socket.id, "Unknown action."); return; }
-    if (action === "fold") { player.folded = true; player.acted = true; room.message = `${player.name} folds.`; }
+    if (action === "fold") { player.folded = true; player.acted = true; room.message = `${player.name} folds.`; pushLog(room, player.name, "folded", "bad"); }
     if (action === "check") {
       if (player.bet !== room.currentBet) { fail(socket.id, "You can only check when there is no bet to call."); return; }
-      player.acted = true; room.message = `${player.name} checks.`;
+      player.acted = true; room.message = `${player.name} checks.`; pushLog(room, player.name, "checked", "neutral");
     }
     if (action === "call") {
       const paid = Math.min(player.chips, Math.max(0, room.currentBet - player.bet));
       player.chips -= paid; player.bet += paid; player.contributed += paid; player.acted = true;
       room.message = `${player.name} ${paid === 0 ? "checks" : `calls ${paid}`}.`;
+      pushLog(room, player.name, paid === 0 ? "checked" : `called ${paid}`, "neutral");
     }
     if (action === "raise") {
       const target = Number(amount);
@@ -291,7 +307,7 @@ io.on("connection", (socket) => {
       player.chips -= paid; player.bet = target; player.contributed += paid;
       room.minRaise = Math.max(room.bigBlind, increase); room.currentBet = target;
       room.players.forEach((other) => { if (!other.folded && other.id !== player.id && other.chips > 0) other.acted = false; });
-      player.acted = true; room.message = `${player.name} raises to ${target}.`;
+      player.acted = true; room.message = `${player.name} raises to ${target}.`; pushLog(room, player.name, `raised to ${target}`, "good");
     }
     const previousSeat = player.seat;
     room.turnId = nextPlayer(room, previousSeat, (other) => !other.folded && other.chips > 0 && (!other.acted || other.bet < room.currentBet))?.id ?? null;

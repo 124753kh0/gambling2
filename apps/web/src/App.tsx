@@ -146,6 +146,23 @@ function App() {
             <div className="raise-control"><label htmlFor="raise-slider">RAISE TO <b>{money(raiseTo)}</b></label><input id="raise-slider" type="range" min={Math.max(minRaiseTo, snapshot.bigBlind)} max={Math.max(minRaiseTo, (me?.chips ?? 0) + (me?.bet ?? 0))} step={snapshot.bigBlind} value={Math.min(raiseTo, Math.max(minRaiseTo, (me?.chips ?? 0) + (me?.bet ?? 0)))} onChange={(event) => setRaiseTo(Number(event.target.value))} disabled={!isMyTurn || !canRaise} /><button className="raise-button" disabled={!isMyTurn || !canRaise} onClick={() => act("raise", raiseTo)}>Raise <span>↗</span></button></div>
           </div>}
         </div>
+        <aside className="info-panel">
+          <div className="panel-header">Table depth</div>
+          <div className="stat-grid">
+            <div><strong>{playersAtTable.filter((player) => player.connected).length}</strong><span>at table</span></div>
+            <div><strong>{snapshot.communityCards.filter(Boolean).length}</strong><span>board cards</span></div>
+            <div><strong>{money(snapshot.pot)}</strong><span>pot value</span></div>
+            <div><strong>{money(snapshot.currentBet)}</strong><span>current bet</span></div>
+          </div>
+          <ul className="feed-list">
+            {snapshot.log.map((entry, index) => (
+              <li key={`${entry.player}-${entry.text}-${index}`} className={`feed-item ${entry.tone}`}>
+                <span>{entry.player}</span>
+                <p>{entry.text}</p>
+              </li>
+            ))}
+          </ul>
+        </aside>
         <div className="table-caption"><span>{playersAtTable.length}/6 SEATS <b>·</b> {activePlayers.length} IN HAND</span><span>PLAY-MONEY TABLE <b>·</b> NO CASH VALUE</span></div>
       </section>
     </main>

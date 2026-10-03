@@ -16,6 +16,12 @@ export interface PublicPlayer {
   cards: string[];
 }
 
+export interface ActionFeedItem {
+  player: string;
+  text: string;
+  tone: "neutral" | "good" | "bad";
+}
+
 export interface RoomSnapshot {
   roomId: string;
   players: PublicPlayer[];
@@ -29,6 +35,7 @@ export interface RoomSnapshot {
   handNumber: number;
   message: string;
   winnerIds: string[];
+  log: ActionFeedItem[];
   you: { id: string; name: string } | null;
 }
 
