@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/apps/server/src/index.js",
     "build": "tsc -p tsconfig.json",
-    "test": "tsx --test src/poker.test.ts"
+    "test": "tsx --test src/poker.test.ts src/loans.test.ts"
   },
   "dependencies": {
     "express": "^4.21.2",
