@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { io, type Socket } from "socket.io-client";
 import type { ClientToServerEvents, PlayerAction, RoomSnapshot, ServerToClientEvents } from "../../../shared/protocol";
-import { calculateLoanAmount } from "../../../shared/loans";
+import { calculateLoanAmount, canTakeLoan } from "../../../shared/loans";
 
 type PokerSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (import.meta.env.DEV
@@ -47,6 +47,7 @@ function App() {
   const minRaiseTo = snapshot ? snapshot.currentBet + snapshot.minRaise : 40;
   const maxRaiseTo = me ? me.bet + Math.max(me.chips, 0) : minRaiseTo;
   const canRaise = Boolean(me && snapshot && maxRaiseTo > snapshot.currentBet && maxRaiseTo >= minRaiseTo);
+  const loanEligible = me ? canTakeLoan(me.chips) : false;
   const playersAtTable = useMemo(() => snapshot?.players ?? [], [snapshot?.players]);
 
   function rememberName() {
@@ -121,7 +122,7 @@ function App() {
             <div className="felt-inner" />
             <div className="table-topline"><span><i className="live-dot" /> FRIENDS ONLY</span><span>NO LIMIT · HOLD’EM</span></div>
             <div className="pot-display" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: 14, maxWidth: "min(90vw, 520px)" }}>
                 <div><span className="pot-label">MAIN POT</span><strong style={{ display: "block" }}>{money(snapshot.mainPot)}</strong></div>
                 {snapshot.sidePots.map((sidePot, index) => (
                   <div key={index}><span className="pot-label">SIDE POT {index + 1}</span><strong style={{ display: "block" }}>{money(sidePot)}</strong></div>
@@ -163,6 +164,11 @@ function App() {
             <button className="action-button" disabled={!isMyTurn} onClick={() => act(callAmount === 0 ? "check" : "call")}>{callAmount === 0 ? "Check" : `Call ${money(callAmount)}`}</button>
             <div className="raise-control"><label htmlFor="raise-slider">RAISE TO <b>{money(raiseTo)}</b></label><input id="raise-slider" type="range" min={Math.max(minRaiseTo, snapshot.bigBlind)} max={Math.max(minRaiseTo, maxRaiseTo)} step={snapshot.bigBlind} value={Math.min(raiseTo, Math.max(minRaiseTo, maxRaiseTo))} onChange={(event) => setRaiseTo(Number(event.target.value))} disabled={!isMyTurn || !canRaise} /><button className="raise-button" disabled={!isMyTurn || !canRaise} onClick={() => act("raise", raiseTo)}>Raise <span>↗</span></button></div>
           </div>}
+          {loanEligible && (
+            <button className="primary-button start-button loan-button" onClick={takeLoan} disabled={!connected}>
+              <span>Take {money(calculateLoanAmount(me?.chips ?? 0))} chip loan</span><b>+</b>
+            </button>
+          )}
         </div>
         <aside className="info-panel">
           <div className="panel-header">Table depth</div>
@@ -180,11 +186,6 @@ function App() {
               </li>
             ))}
           </ul>
-          {me && me.chips <= 0 && (
-            <button className="primary-button start-button loan-button" onClick={takeLoan}>
-              <span>Take {money(calculateLoanAmount(me.chips))} chip loan</span><b>+</b>
-            </button>
-          )}
         </aside>
         <div className="table-caption"><span>{playersAtTable.length}/6 SEATS <b>·</b> {activePlayers.length} IN HAND</span><span>PLAY-MONEY TABLE <b>·</b> NO CASH VALUE</span></div>
       </section>

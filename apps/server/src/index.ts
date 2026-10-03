@@ -5,8 +5,8 @@ import express from "express";
 import { randomInt, randomUUID } from "node:crypto";
 import { Server } from "socket.io";
 import type { ClientToServerEvents, PlayerAction, RoomSnapshot, ServerToClientEvents, Street } from "../../../shared/protocol.js";
-import { calculateLoanAmount } from "../../../shared/loans.js";
-import { buildSidePots, collectStreetBets } from "./pot.js";
+import { calculateLoanAmount, canTakeLoan } from "../../../shared/loans.js";
+import { buildPotBreakdown, buildPotLayers, collectStreetBets } from "./pot.js";
 import { compareHands, evaluateBestHand, type Card } from "./poker.js";
 
 interface Player {
@@ -106,11 +106,12 @@ function settleWinnings(player: Player, amount: number): void {
 }
 function announce(room: Room): void {
   const totalPot = room.pot + room.players.reduce((sum, seat) => sum + seat.bet, 0);
-  const sidePots = buildSidePots(room.players.map((seat) => ({
+  const potBreakdown = buildPotBreakdown(totalPot, room.players.map((seat) => ({
     id: seat.id,
     amount: seat.contributed,
     folded: seat.folded,
-  }))).slice(1).map((sidePot) => sidePot.amount);
+    allIn: seat.allIn,
+  })));
   for (const player of room.players) {
     const snapshot: RoomSnapshot = {
       roomId: room.id,
@@ -124,7 +125,7 @@ function announce(room: Room): void {
         cards: seat.id === player.id || (room.street === "showdown" && !seat.folded) ? seat.cards.map(cardText) : [],
       })),
       communityCards: room.community.map(cardText), pot: totalPot,
-      mainPot: totalPot - sidePots.reduce((sum, sidePot) => sum + sidePot, 0), sidePots,
+      ...potBreakdown,
       street: room.street, currentBet: room.currentBet, minRaise: room.minRaise,
       smallBlind: room.smallBlind, bigBlind: room.bigBlind, handNumber: room.handNumber,
       message: room.message, winnerIds: room.winnerIds,
@@ -228,11 +229,16 @@ function awardShowdown(room: Room): void {
   payStreet(room);
   const winners = new Set<string>();
   const payouts = new Map<string, number>();
-  const sidePots = buildSidePots(room.players.map((player) => ({
+  const { pots: sidePots, uncalledReturns } = buildPotLayers(room.players.map((player) => ({
     id: player.id,
     amount: player.contributed,
     folded: player.folded,
+    allIn: player.allIn,
   })));
+  uncalledReturns.forEach(({ playerId, amount }) => {
+    const player = room.players.find((entry) => entry.id === playerId);
+    if (player) player.chips += amount;
+  });
   for (const sidePot of sidePots) {
     const contenders = room.players.filter((player) => sidePot.eligibleIds.includes(player.id));
     if (contenders.length === 0) throw new Error("A showdown side pot has no eligible players.");
@@ -316,10 +322,10 @@ io.on("connection", (socket) => {
   });
   socket.on("game:loan", () => {
     const room = roomFor(socket.id);
-    if (!room) return;
+    if (!room) { fail(socket.id, "Join a table before taking a loan."); return; }
     const player = room.players.find((entry) => entry.id === socket.id);
-    if (!player) return;
-    if (player.chips > 0) { fail(socket.id, "You can only take a loan when your chips are at zero or below."); return; }
+    if (!player) { fail(socket.id, "You are not seated at this table."); return; }
+    if (!canTakeLoan(player.chips)) { fail(socket.id, "You can only take a loan when your chips are at zero or below."); return; }
     const loanAmount = takeLoan(player, calculateLoanAmount(player.chips));
     if (!loanAmount) { fail(socket.id, "Unable to calculate a loan amount."); return; }
     room.message = `${player.name} takes a ${loanAmount} chip loan.`;
